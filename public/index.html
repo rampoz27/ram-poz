@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prediksi Bola Scraper</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Scraper Prediksi Bola</h1>
+
+    <div class="action-bar">
+      <div class="date-group">
+        <label for="startDate">Tanggal Awal:</label>
+        <input type="date" id="startDate">
+      </div>
+      <div class="date-group">
+        <label for="endDate">Tanggal Akhir:</label>
+        <input type="date" id="endDate">
+      </div>
+      <button id="btnFetch" onclick="fetchData()">Ambil Data</button>
+      <button id="btnCopy" onclick="copyGeneratedHTML()" style="background: linear-gradient(45deg, #00ff88, #052a05); color: #fff; display: none;">Copy HTML</button>
+      <span id="statusInfo"></span>
+    </div>
+
+    <!-- AREA TAMPILAN PREVIEW DI WEB -->
+    <div id="outputPreview">
+      <div class="date" id="dateHeader">⚽ SILAKAN PILIH TANGGAL & KLIK AMBIL DATA ⚽</div>
+
+      <div class="marquee">
+        <p>🌟 DAFTAR &amp; PASANG TARUHAN ANDA DI JUTAWANBET - PREDIKSI TERAKURAT SETIAP HARI! 🌟</p>
+      </div>
+
+      <div id="tablesContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const today = new Date();
+      const tomorrow = new Date();
+      tomorrow.setDate(today.getDate() + 1);
+
+      document.getElementById('startDate').value = formatDateForInput(today);
+      document.getElementById('endDate').value = formatDateForInput(tomorrow);
+    });
+
+    function formatDateForInput(dateObj) {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatTanggalIndonesia(dateStr) {
+      if(!dateStr) return '';
+      const date = new Date(dateStr);
+      const hari = date.toLocaleDateString('id-ID', { weekday: 'long' }).toUpperCase();
+      const tgl = date.getDate();
+      const bulan = date.toLocaleDateString('id-ID', { month: 'long' }).toUpperCase();
+      const tahun = date.getFullYear();
+      return `${hari}, ${tgl} ${bulan} ${tahun}`;
+    }
+
+    async function fetchData() {
+      const btnFetch = document.getElementById('btnFetch');
+      const btnCopy = document.getElementById('btnCopy');
+      const status = document.getElementById('statusInfo');
+      const container = document.getElementById('tablesContainer');
+      const dateHeader = document.getElementById('dateHeader');
+
+      const startDateVal = document.getElementById('startDate').value;
+      const endDateVal = document.getElementById('endDate').value;
+
+      if (!startDateVal || !endDateVal) {
+        alert("Pilih tanggal awal dan akhir terlebih dahulu!");
+        return;
+      }
+
+      btnFetch.disabled = true;
+      btnCopy.style.display = 'none';
+      status.innerText = 'Mengambil data...';
+      container.innerHTML = '<p style="text-align: center; padding: 20px;">Sedang memproses data...</p>';
+
+      try {
+        const res = await fetch(`/api/scrape?start=${startDateVal}&end=${endDateVal}`);
+        const result = await res.json();
+
+        if (result.error) {
+          alert("Error: " + result.error);
+          status.innerText = "Gagal mengambil data.";
+          container.innerHTML = '';
+          return;
+        }
+
+        status.innerText = `Berhasil! Total ${result.total} pertandingan.`;
+        
+        const tglAwalFormatted = formatTanggalIndonesia(startDateVal);
+        const tglAkhirFormatted = formatTanggalIndonesia(endDateVal);
+        dateHeader.innerText = `⚽ ${tglAwalFormatted} - ${tglAkhirFormatted} ⚽`;
+        
+        container.innerHTML = '';
+
+        if (result.data.length === 0) {
+          container.innerHTML = '<p style="text-align: center; padding: 20px;">Tidak ada data ditemukan.</p>';
+          return;
+        }
+
+        // KELOMPOKKAN DATA BERDASARKAN LIGA
+        const groupedByLeague = {};
+        result.data.forEach(item => {
+          if (!groupedByLeague[item.liga]) {
+            groupedByLeague[item.liga] = [];
+          }
+          groupedByLeague[item.liga].push(item);
+        });
+
+        // GENERATE TABEL
+        for (const liga in groupedByLeague) {
+          const table = document.createElement('table');
+          table.className = 'prediction-table';
+
+          let rowsHTML = '';
+          groupedByLeague[liga].forEach(match => {
+            rowsHTML += `
+<tr>
+<td>${match.tanggal} ${match.waktu}</td>
+<td>${match.home} VS ${match.away}</td>
+<td>${match.skor}</td>
+</tr>`;
+          });
+
+          table.innerHTML = `
+<thead>
+<tr>
+<th colspan="3">${liga}</th>
+</tr>
+<tr>
+<th class="date-column">TANGGAL &amp; WAKTU</th>
+<th class="match-column">PERTANDINGAN</th>
+<th class="score-column">SKOR</th>
+</tr>
+</thead>
+<tbody>${rowsHTML}
+</tbody>`;
+
+          container.appendChild(table);
+        }
+
+        // TAMPILKAN TOMBOL COPY JIKA DATA BERHASIL DIMUAT
+        btnCopy.style.display = 'inline-block';
+
+      } catch (err) {
+        status.innerText = 'Terjadi kesalahan sistem.';
+        console.error(err);
+      } finally {
+        btnFetch.disabled = false;
+      }
+    }
+
+    // FUNGSI COPY HTML MENTAH SESUAI FORMAT TEMPLATE EXACT
+    function copyGeneratedHTML() {
+      const dateHeaderText = document.getElementById('dateHeader').innerText;
+      const tablesContainerHTML = document.getElementById('tablesContainer').innerHTML;
+
+      const styleBlock = `<style>
+    .date { 
+        text-align: center; 
+        font-size: 16px; 
+        color: #aaffcc; 
+        margin-bottom: 15px; 
+        font-weight: bold; 
+        background: linear-gradient(45deg, #052a05, #00ff88); 
+        padding: 8px; 
+        border-radius: 5px; 
+        font-family: Arial, sans-serif; 
+    }
+    .prediction-table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin: 15px 0; 
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); 
+        border-radius: 8px; 
+        overflow: hidden; 
+        background: linear-gradient(135deg, #052a05, #2a0a0a); 
+        font-size: 14px; 
+        font-family: Arial, sans-serif; 
+    }
+    .prediction-table th { 
+        background: linear-gradient(45deg, #00ff88, #052a05); 
+        color: #aaffcc; 
+        text-align: center; 
+        padding: 12px 8px; 
+        font-weight: 600; 
+        text-transform: uppercase; 
+        letter-spacing: 0.5px; 
+        border-bottom: 2px solid #aaffcc; 
+    }
+    .prediction-table td { 
+        text-align: center; 
+        padding: 10px 8px; 
+        color: #aaffcc; 
+        border-bottom: 1px solid #333; 
+        background: rgba(0, 0, 0, 0.7); 
+    }
+    .prediction-table tr:nth-child(even) td { 
+        background: rgba(30, 0, 0, 0.7); 
+    }
+    .prediction-table tr:hover td { 
+        background: rgba(139, 0, 0, 0.5); 
+        color: #aaffcc; 
+    }
+    
+    .date-column { width: 25%; }
+    .match-column { width: 55%; }
+    .score-column { width: 20%; }
+
+    .marquee { 
+        overflow: hidden; 
+        white-space: nowrap; 
+        background: linear-gradient(90deg, #052a05, #00ff88, #052a05); 
+        color: #aaffcc; 
+        padding: 12px 0; 
+        font-size: 16px; 
+        font-weight: bold; 
+        border-radius: 5px; 
+        margin-bottom: 15px; 
+        font-family: Arial, sans-serif; 
+    }
+    .marquee p { 
+        display: inline-block; 
+        animation: marquee 20s linear infinite; 
+        padding-left: 100%; 
+        margin: 0; 
+    }
+    @keyframes marquee { 
+        0% { transform: translateX(0); } 
+        100% { transform: translateX(-100%); } 
+    }
+    @media (max-width: 768px) { 
+        .prediction-table { font-size: 12px; } 
+        .prediction-table th, .prediction-table td { padding: 8px 5px; font-size: 11px; } 
+    }
+    @media (max-width: 480px) { 
+        .prediction-table { font-size: 10px; } 
+        .prediction-table th, .prediction-table td { padding: 6px 3px; font-size: 9px; } 
+    }
+</style>`;
+
+      const fullHTMLToCopy = `${styleBlock}
+<div class="date">${dateHeaderText}</div>
+<div class="marquee">
+<p>🌟 DAFTAR &amp; PASANG TARUHAN ANDA DI JUTAWANBET - PREDIKSI TERAKURAT SETIAP HARI! 🌟</p>
+</div>
+${tablesContainerHTML}`;
+
+      navigator.clipboard.writeText(fullHTMLToCopy).then(() => {
+        alert("Kode HTML berhasil disalin ke Clipboard!");
+      }).catch(err => {
+        alert("Gagal menyalin HTML: " + err);
+      });
+    }
+  </script>
+</body>
+</html>
