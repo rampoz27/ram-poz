@@ -13,25 +13,27 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Explicit route untuk index.html agar tidak error "Cannot GET /"
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.get('/api/scrape', async (req, res) => {
+  const targetPath = req.query.url; // Menerima parameter ?url=...
+  
+  if (!targetPath) {
+    return res.status(400).json({ error: 'Parameter url wajib diisi!' });
+  }
+
+  const baseUrl = 'https://jpkoloni4d.pagesco.de';
+  
+  // Bentuk full URL jika user hanya menginput path relatif
+  const fullUrl = targetPath.startsWith('http') 
+    ? targetPath 
+    : `${baseUrl}${targetPath.startsWith('/') ? '' : '/'}${targetPath}`;
+
   try {
-    const link = "jpkoloni4d.pagesco.de";
-
-    const startDateParam = req.query.start; 
-    const endDateParam = req.query.end;     
-
-    let d1 = startDateParam ? new Date(startDateParam) : new Date();
-    let d2 = endDateParam ? new Date(endDateParam) : new Date(new Date().setDate(d1.getDate() + 1));
-
-    const t1 = d1.getDate();
-    const t2 = d2.getDate();
-
-    const bulan = d1.toLocaleString('id-ID', { month: 'long' }).toLowerCase();
-    const tahun = d1.getFullYear();
-
-    const linkLengkap = `https://${link}/prediksi-bola-${t1}-${t2}-${bulan}-${tahun}`;
-
-    const response = await fetch(linkLengkap, {
+    const response = await fetch(fullUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
@@ -44,9 +46,12 @@ app.get('/api/scrape', async (req, res) => {
     const htmlString = await response.text();
     const $ = cheerio.load(htmlString);
 
+    // Ambil judul/header halaman jika ada (fallback ke title/h1)
+    const headerTitle = $('h1').first().text().trim() || $('title').text().trim() || 'PREDIKSI BOLA';
+
     let matches = [];
 
-    // Menggunakan Selector DOM Elemen (Sejalan dengan logika DOMParser)
+    // Menggunakan Selector DOM Elemen
     $('section.league-block').each((_, block) => {
       const namaLiga = $(block).find('h3').text().trim() || 'LIGA LAIN';
 
@@ -73,7 +78,12 @@ app.get('/api/scrape', async (req, res) => {
       });
     });
 
-    res.json({ url_used: linkLengkap, total: matches.length, data: matches });
+    res.json({ 
+      url_used: fullUrl, 
+      headerTitle: headerTitle,
+      total: matches.length, 
+      data: matches 
+    });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
