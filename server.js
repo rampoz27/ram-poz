@@ -25,7 +25,7 @@ app.get('/api/scrape', async (req, res) => {
     return res.status(400).json({ error: 'Parameter url wajib diisi!' });
   }
 
-  const baseUrl = 'https://jpkoloni4d.pagesco.de';
+  const baseUrl = 'https://koloni4d.jadwalbola.org';
   
   // Bentuk full URL jika user hanya menginput path relatif
   const fullUrl = targetPath.startsWith('http') 
